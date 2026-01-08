@@ -99,28 +99,39 @@ class NightMarketMonster {
         this.hp = 2; this.imgIndex = floor(random(4));
         this.isDead = false; this.dragIndex = -1; // 排隊序號
     }
-    update() {
+update() {
         if (!this.isDead) {
-            let a = atan2(player.y-this.y, player.x-this.x);
-            this.x += cos(a)*2.5; this.y += sin(a)*2.5;
+            let a = atan2(player.y - this.y, player.x - this.x);
+            this.x += cos(a) * 2.5; this.y += sin(a) * 2.5;
         } else {
-            let d = dist(player.x, player.y, this.x, this.y);
-            if (d < 70 || this.dragIndex !== -1) {
-                // 排隊邏輯：第一隻跟著玩家，之後的跟著前一隻
+            // 找出所有死掉的怪物，確定自己的排隊順序
+            let deadEnemies = enemies.filter(e => e.isDead);
+            this.dragIndex = deadEnemies.indexOf(this);
+
+            // 只有距離玩家夠近，或是已經在隊伍裡的才會被拖動
+            let dToPlayer = dist(player.x, player.y, this.x, this.y);
+            if (dToPlayer < 100 || this.dragIndex !== -1) {
                 let targetX, targetY;
-                let deadEnemies = enemies.filter(e => e.isDead);
-                this.dragIndex = deadEnemies.indexOf(this);
-                
+
                 if (this.dragIndex === 0) {
-                    targetX = player.x; targetY = player.y + 40;
-                } else {
+                    // 第一隻死掉的怪，跟在玩家正後方 40 像素處
+                    targetX = player.x; 
+                    targetY = player.y + 45;
+                } else if (this.dragIndex > 0) {
+                    // 後面的怪，跟在前一隻怪的後方 35 像素處
                     let leader = deadEnemies[this.dragIndex - 1];
-                    targetX = leader.x; targetY = leader.y + 35;
+                    targetX = leader.x; 
+                    targetY = leader.y + 35;
                 }
-                this.x = lerp(this.x, targetX, 0.15);
-                this.y = lerp(this.y, targetY, 0.15);
+
+                // 使用 lerp 讓移動更平滑，且不會直接瞬移到中間
+                if (targetX !== undefined) {
+                    this.x = lerp(this.x, targetX, 0.2);
+                    this.y = lerp(this.y, targetY, 0.2);
+                }
             }
         }
+    }
     }
     display() {
         push(); translate(this.x, this.y);
