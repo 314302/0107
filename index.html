@@ -10,7 +10,7 @@
 let player, bullets = [], enemies = [], deadQueue = [], bossBullets = [], fragments = [], boss;
 let imgs = [];
 let gameTimer = 0, gameOver = false, score = 0;
-let totalCleaned = 0, TARGET_CLEANED = 15; // 存滿 15 隻出 Boss
+let totalCleaned = 0, TARGET_CLEANED = 15; 
 let bins = [];
 let leftJoy = { active: false, id: -1, x: 0, y: 0, currX: 0, currY: 0 };
 let rightJoy = { active: false, id: -1, x: 0, y: 0, currX: 0, currY: 0 };
@@ -37,14 +37,14 @@ function setup() {
 function draw() {
     if (gameOver) {
         background(0, 200); fill(255, 50, 50); textAlign(CENTER); textSize(40);
-        text("守護失敗！", width/2, height/2);
+        text("環境守護失敗！", width/2, height/2);
         textSize(20); fill(255); text("點擊畫面重新開始", width/2, height/2 + 50);
         return;
     }
     background(20, 25, 35);
     handleInput();
 
-    // 1. 繪製垃圾桶
+    // 繪製垃圾桶
     rectMode(CENTER);
     for (let b of bins) {
         fill(b.col); stroke(255); strokeWeight(2);
@@ -55,12 +55,12 @@ function draw() {
 
     player.update(); player.display();
 
-    // 2. 遊戲進程：產怪 or Boss
+    // 遊戲進程
     if (totalCleaned < TARGET_CLEANED) {
         if (frameCount % 80 === 0 && enemies.length < 8) enemies.push(new NightMarketMonster());
     } else if (!boss) {
         boss = new StyrofoamTitan();
-        enemies = []; // 清空活怪
+        enemies = []; 
     }
 
     if (boss) {
@@ -71,7 +71,7 @@ function draw() {
         }
     }
 
-    updateAndCombat();
+    updateAndCombat(); // 所有的戰鬥與撿垃圾邏輯都在這裡
     drawUI();
     drawJoystick(leftJoy, color(0, 200, 255, 80));
     drawJoystick(rightJoy, color(255, 50, 50, 80));
@@ -97,6 +97,7 @@ class NightMarketMonster {
     constructor() {
         this.x = random(width); this.y = -50;
         this.hp = 2; this.imgIndex = floor(random(4));
+        this.isPickedUp = false; // 新增：是否被撿起
     }
     update() {
         let a = atan2(player.y-this.y, player.x-this.x);
@@ -126,7 +127,7 @@ class StyrofoamTitan {
 }
 
 function updateAndCombat() {
-    // 處理玩家子彈
+    // 處理子彈
     for (let i = bullets.length-1; i >= 0; i--) {
         bullets[i].update(); bullets[i].display();
         let hit = false;
@@ -137,39 +138,53 @@ function updateAndCombat() {
             if (dist(bullets[i].x, bullets[i].y, enemies[j].x, enemies[j].y) < 30) {
                 enemies[j].hp--; 
                 if (enemies[j].hp <= 0) {
-                    deadQueue.push(enemies[j]); // 移入垃圾隊伍
+                    deadQueue.push(enemies[j]); 
                     enemies.splice(j, 1);
                 }
                 hit = true; break;
             }
         }
-        if (hit || bullets[i].y < 0) bullets.splice(i, 1);
+        if (hit || bullets[i].y < 0 || bullets[i].x < 0 || bullets[i].x > width) bullets.splice(i, 1);
     }
 
-    // 處理活怪攻擊玩家
+    // 處理活怪
     for (let e of enemies) {
         e.update(); e.display();
         if (dist(e.x, e.y, player.x, player.y) < 35) player.hp -= 0.3;
     }
 
-    // 處理垃圾隊伍 (跟隨玩家)
+    // 處理垃圾隊伍 (撿起與排隊)
+    let pickedUpList = deadQueue.filter(e => e.isPickedUp);
+
     for (let i = 0; i < deadQueue.length; i++) {
-        let targetX, targetY;
-        if (i === 0) { targetX = player.x; targetY = player.y + 45; }
-        else { targetX = deadQueue[i-1].x; targetY = deadQueue[i-1].y + 35; }
-        
-        deadQueue[i].x = lerp(deadQueue[i].x, targetX, 0.2);
-        deadQueue[i].y = lerp(deadQueue[i].y, targetY, 0.2);
-        
-        push(); translate(deadQueue[i].x, deadQueue[i].y);
-        drawingContext.globalAlpha = 0.5;
-        imageMode(CENTER); image(imgs[deadQueue[i].imgIndex], 0, 0, 50, 50);
+        let e = deadQueue[i];
+        if (!e.isPickedUp) {
+            // 碰觸撿起判定
+            if (dist(player.x, player.y, e.x, e.y) < 50) e.isPickedUp = true;
+        } else {
+            // 排隊跟隨邏輯
+            let targetX, targetY;
+            let myOrder = pickedUpList.indexOf(e);
+            if (myOrder === 0) { targetX = player.x; targetY = player.y + 45; }
+            else { targetX = pickedUpList[myOrder-1].x; targetY = pickedUpList[myOrder-1].y + 35; }
+            e.x = lerp(e.x, targetX, 0.2);
+            e.y = lerp(e.y, targetY, 0.2);
+        }
+
+        // 繪製垃圾
+        push(); translate(e.x, e.y);
+        if (e.isPickedUp) drawingContext.globalAlpha = 0.6;
+        else {
+            noFill(); stroke(0, 255, 255, 150); 
+            ellipse(0, 0, 50 + sin(frameCount*0.1)*10);
+        }
+        imageMode(CENTER); image(imgs[e.imgIndex], 0, 0, 50, 50);
         pop();
     }
 
-    // 垃圾進桶判定 (只判定隊伍第一隻)
-    if (deadQueue.length > 0) {
-        let first = deadQueue[0];
+    // 進桶判定
+    if (pickedUpList.length > 0) {
+        let first = pickedUpList[0];
         for (let b of bins) {
             if (dist(first.x, first.y, b.x, b.y) < 90) {
                 if (first.imgIndex === b.type) {
@@ -177,7 +192,7 @@ function updateAndCombat() {
                 } else {
                     score -= 50; player.hp -= 15;
                 }
-                deadQueue.splice(0, 1); // 移出隊伍
+                deadQueue.splice(deadQueue.indexOf(first), 1);
                 break;
             }
         }
@@ -188,7 +203,7 @@ function updateAndCombat() {
         bossBullets[i].update(); bossBullets[i].display();
         if (dist(bossBullets[i].x, bossBullets[i].y, player.x, player.y) < 25) {
             player.hp -= 10; bossBullets.splice(i, 1);
-        } else if (bossBullets[i].y > height) bossBullets.splice(i, 1);
+        }
     }
     if (player.hp <= 0) gameOver = true;
 }
@@ -204,12 +219,12 @@ class Bullet {
 
 function drawUI() {
     fill(255); textAlign(LEFT); textSize(18);
-    text(`機器人能源: ${floor(player.hp)}%`, 20, 30);
-    text(`淨化進度: ${totalCleaned} / ${TARGET_CLEANED}`, 20, 60);
+    text(`能源: ${floor(player.hp)}%`, 20, 30);
+    text(`進度: ${totalCleaned} / ${TARGET_CLEANED}`, 20, 60);
     if (totalCleaned < TARGET_CLEANED) {
-        fill(0, 255, 255); textSize(14); text("任務：擊倒垃圾並拖曳至垃圾桶分類", 20, 90);
-    } else if (boss) {
-        fill(255, 50, 50); text(`BOSS HP: ${floor(boss.hp)}`, 20, 90);
+        fill(0, 255, 255); textSize(14); text("走過去碰觸垃圾以撿起分類", 20, 90);
+    } else {
+        fill(255, 50, 50); text("BOSS 降臨！", 20, 90);
     }
 }
 
