@@ -7,20 +7,20 @@
 </head>
 <body>
 <script>
-let player, bullets = [], enemies = [], bossBullets = [], fragments = [], boss;
+let player, bullets = [], enemies = [], deadQueue = [], bossBullets = [], fragments = [], boss;
 let imgs = [];
 let gameTimer = 0, gameOver = false, score = 0;
-let totalCleaned = 0, TARGET_CLEANED = 15; // 設定清理 15 隻小怪後 Boss 出現
+let totalCleaned = 0, TARGET_CLEANED = 15; // 存滿 15 隻出 Boss
 let bins = [];
 let leftJoy = { active: false, id: -1, x: 0, y: 0, currX: 0, currY: 0 };
 let rightJoy = { active: false, id: -1, x: 0, y: 0, currX: 0, currY: 0 };
 let joySize = 130;
 
 function preload() {
-    imgs[0] = loadImage('怪物1號.png'); // 黃
-    imgs[1] = loadImage('怪物二號.png'); // 紅
-    imgs[2] = loadImage('怪物三號.png'); // 綠
-    imgs[3] = loadImage('怪物四號.png'); // 藍
+    imgs[0] = loadImage('怪物1號.png'); 
+    imgs[1] = loadImage('怪物二號.png'); 
+    imgs[2] = loadImage('怪物三號.png'); 
+    imgs[3] = loadImage('怪物四號.png'); 
 }
 
 function setup() { 
@@ -36,7 +36,7 @@ function setup() {
 
 function draw() {
     if (gameOver) {
-        background(0, 180); fill(255, 50, 50); textAlign(CENTER); textSize(40);
+        background(0, 200); fill(255, 50, 50); textAlign(CENTER); textSize(40);
         text("守護失敗！", width/2, height/2);
         textSize(20); fill(255); text("點擊畫面重新開始", width/2, height/2 + 50);
         return;
@@ -44,7 +44,7 @@ function draw() {
     background(20, 25, 35);
     handleInput();
 
-    // 繪製垃圾桶
+    // 1. 繪製垃圾桶
     rectMode(CENTER);
     for (let b of bins) {
         fill(b.col); stroke(255); strokeWeight(2);
@@ -55,12 +55,12 @@ function draw() {
 
     player.update(); player.display();
 
-    // 遊戲階段邏輯
+    // 2. 遊戲進程：產怪 or Boss
     if (totalCleaned < TARGET_CLEANED) {
-        if (frameCount % 80 === 0 && enemies.length < 10) enemies.push(new NightMarketMonster());
+        if (frameCount % 80 === 0 && enemies.length < 8) enemies.push(new NightMarketMonster());
     } else if (!boss) {
         boss = new StyrofoamTitan();
-        enemies = []; // 清除剩餘小怪迎接 Boss
+        enemies = []; // 清空活怪
     }
 
     if (boss) {
@@ -71,19 +71,19 @@ function draw() {
         }
     }
 
-    handleCombatAndQueueSorting();
+    updateAndCombat();
     drawUI();
     drawJoystick(leftJoy, color(0, 200, 255, 80));
     drawJoystick(rightJoy, color(255, 50, 50, 80));
 }
 
 class Player {
-    constructor() { this.x = width/2; this.y = height*0.6; this.vx = 0; this.vy = 0; this.hp = 100; }
+    constructor() { this.x = width/2; this.y = height*0.5; this.vx = 0; this.vy = 0; this.hp = 100; }
     update() {
-        this.vx *= 0.88; this.vy *= 0.88;
+        this.vx *= 0.85; this.vy *= 0.85;
         this.x += this.vx; this.y += this.vy;
         this.x = constrain(this.x, 20, width-20);
-        this.y = constrain(this.y, 20, height-150);
+        this.y = constrain(this.y, 20, height-160);
     }
     display() {
         push(); translate(this.x, this.y);
@@ -97,43 +97,13 @@ class NightMarketMonster {
     constructor() {
         this.x = random(width); this.y = -50;
         this.hp = 2; this.imgIndex = floor(random(4));
-        this.isDead = false; this.dragIndex = -1; // 排隊序號
     }
-update() {
-        if (!this.isDead) {
-            // 活著的時候：追逐玩家
-            let a = atan2(player.y - this.y, player.x - this.x);
-            this.x += cos(a) * 2.5; 
-            this.y += sin(a) * 2.5;
-        } else {
-            // 死了以後：只跟隨「已經在隊伍中」的遺體
-            // 我們只篩選出已經死亡的怪物來排隊
-            let deadQueue = enemies.filter(e => e.isDead);
-            let myIndex = deadQueue.indexOf(this);
-
-            let targetX, targetY;
-            if (myIndex === 0) {
-                // 第一個遺體：跟隨玩家
-                targetX = player.x;
-                targetY = player.y + 45;
-            } else {
-                // 後面的遺體：只跟隨前一個「遺體」
-                let leader = deadQueue[myIndex - 1];
-                targetX = leader.x;
-                targetY = leader.y + 35;
-            }
-
-            // 平滑移動到隊伍位置
-            this.x = lerp(this.x, targetX, 0.2);
-            this.y = lerp(this.y, targetY, 0.2);
-        }
-    }
+    update() {
+        let a = atan2(player.y-this.y, player.x-this.x);
+        this.x += cos(a)*2.2; this.y += sin(a)*2.2;
     }
     display() {
-        push(); translate(this.x, this.y);
-        if (this.isDead) drawingContext.globalAlpha = 0.5;
-        imageMode(CENTER); image(imgs[this.imgIndex], 0, 0, 50, 50);
-        pop();
+        imageMode(CENTER); image(imgs[this.imgIndex], this.x, this.y, 50, 50);
     }
 }
 
@@ -145,7 +115,7 @@ class StyrofoamTitan {
     update() {
         if (this.y < this.targetY) this.y += 2;
         this.x = width/2 + sin(frameCount*0.02)*120;
-        if (frameCount % 50 === 0) bossBullets.push(new Bullet(this.x, this.y, atan2(player.y-this.y, player.x-this.x), true));
+        if (frameCount % 45 === 0) bossBullets.push(new Bullet(this.x, this.y, atan2(player.y-this.y, player.x-this.x), true));
     }
     display() {
         push(); translate(this.x, this.y);
@@ -155,50 +125,70 @@ class StyrofoamTitan {
     }
 }
 
-function handleCombatAndQueueSorting() {
-    // 處理子彈
+function updateAndCombat() {
+    // 處理玩家子彈
     for (let i = bullets.length-1; i >= 0; i--) {
         bullets[i].update(); bullets[i].display();
+        let hit = false;
         if (boss && dist(bullets[i].x, bullets[i].y, boss.x, boss.y) < 60) {
-            boss.hp -= 5; bullets.splice(i, 1); continue;
+            boss.hp -= 5; hit = true;
         }
-        for (let e of enemies) {
-            if (!e.isDead && dist(bullets[i].x, bullets[i].y, e.x, e.y) < 30) {
-                e.hp--; bullets.splice(i, 1); break;
+        for (let j = enemies.length-1; j >= 0; j--) {
+            if (dist(bullets[i].x, bullets[i].y, enemies[j].x, enemies[j].y) < 30) {
+                enemies[j].hp--; 
+                if (enemies[j].hp <= 0) {
+                    deadQueue.push(enemies[j]); // 移入垃圾隊伍
+                    enemies.splice(j, 1);
+                }
+                hit = true; break;
             }
         }
+        if (hit || bullets[i].y < 0) bullets.splice(i, 1);
     }
 
-    // 處理分類 (排隊進桶)
-    let deadEnemies = enemies.filter(e => e.isDead);
-    if (deadEnemies.length > 0) {
-        let firstInLine = deadEnemies[0]; // 永遠只有隊伍第一隻會被判定進桶
+    // 處理活怪攻擊玩家
+    for (let e of enemies) {
+        e.update(); e.display();
+        if (dist(e.x, e.y, player.x, player.y) < 35) player.hp -= 0.3;
+    }
+
+    // 處理垃圾隊伍 (跟隨玩家)
+    for (let i = 0; i < deadQueue.length; i++) {
+        let targetX, targetY;
+        if (i === 0) { targetX = player.x; targetY = player.y + 45; }
+        else { targetX = deadQueue[i-1].x; targetY = deadQueue[i-1].y + 35; }
+        
+        deadQueue[i].x = lerp(deadQueue[i].x, targetX, 0.2);
+        deadQueue[i].y = lerp(deadQueue[i].y, targetY, 0.2);
+        
+        push(); translate(deadQueue[i].x, deadQueue[i].y);
+        drawingContext.globalAlpha = 0.5;
+        imageMode(CENTER); image(imgs[deadQueue[i].imgIndex], 0, 0, 50, 50);
+        pop();
+    }
+
+    // 垃圾進桶判定 (只判定隊伍第一隻)
+    if (deadQueue.length > 0) {
+        let first = deadQueue[0];
         for (let b of bins) {
-            if (dist(firstInLine.x, firstInLine.y, b.x, b.y) < 80) {
-                if (firstInLine.imgIndex === b.type) {
+            if (dist(first.x, first.y, b.x, b.y) < 90) {
+                if (first.imgIndex === b.type) {
                     score += 100; totalCleaned++; player.hp = min(100, player.hp + 8);
                 } else {
                     score -= 50; player.hp -= 15;
                 }
-                enemies.splice(enemies.indexOf(firstInLine), 1);
+                deadQueue.splice(0, 1); // 移出隊伍
                 break;
             }
         }
     }
 
-    // 更新怪物狀態
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        enemies[i].update(); enemies[i].display();
-        if (!enemies[i].isDead && enemies[i].hp <= 0) enemies[i].isDead = true;
-        if (!enemies[i].isDead && dist(enemies[i].x, enemies[i].y, player.x, player.y) < 35) player.hp -= 0.3;
-    }
-    
     // Boss 子彈
     for (let i = bossBullets.length-1; i >= 0; i--) {
         bossBullets[i].update(); bossBullets[i].display();
         if (dist(bossBullets[i].x, bossBullets[i].y, player.x, player.y) < 25) {
             player.hp -= 10; bossBullets.splice(i, 1);
-        }
+        } else if (bossBullets[i].y > height) bossBullets.splice(i, 1);
     }
     if (player.hp <= 0) gameOver = true;
 }
@@ -217,14 +207,12 @@ function drawUI() {
     text(`機器人能源: ${floor(player.hp)}%`, 20, 30);
     text(`淨化進度: ${totalCleaned} / ${TARGET_CLEANED}`, 20, 60);
     if (totalCleaned < TARGET_CLEANED) {
-        fill(0, 255, 255); textSize(14);
-        text("清理小怪以引出保麗龍泰坦", 20, 90);
+        fill(0, 255, 255); textSize(14); text("任務：擊倒垃圾並拖曳至垃圾桶分類", 20, 90);
     } else if (boss) {
         fill(255, 50, 50); text(`BOSS HP: ${floor(boss.hp)}`, 20, 90);
     }
 }
 
-// 搖桿控制部分 (略，同之前代碼)
 function touchStarted() {
     for (let t of touches) {
         if (t.x < width/2 && !leftJoy.active) { leftJoy.active = true; leftJoy.id = t.id; leftJoy.x = t.x; leftJoy.y = t.y; leftJoy.currX = t.x; leftJoy.currY = t.y; }
@@ -265,36 +253,6 @@ function drawJoystick(joy, col) {
         let d = min(dist(joy.x, joy.y, joy.currX, joy.currY), joySize/2);
         fill(255, 150); ellipse(joy.x + cos(a)*d, joy.y + sin(a)*d, 60);
     }
-}
-function handleCombatAndQueueSorting() {
-    // ... 前方的子彈判定代碼保持不變 ...
-
-    // 取得目前的遺體隊伍
-    let deadQueue = enemies.filter(e => e.isDead);
-    
-    if (deadQueue.length > 0) {
-        // 只有隊伍的第一隻 (最靠近玩家的) 會被垃圾桶吸進去
-        let firstTrash = deadQueue[0]; 
-        
-        for (let b of bins) {
-            // 增加判定距離到 90，讓玩家拖過去時更感應靈敏
-            if (dist(firstTrash.x, firstTrash.y, b.x, b.y) < 90) {
-                if (firstTrash.imgIndex === b.type) {
-                    score += 100; 
-                    totalCleaned++; 
-                    player.hp = min(100, player.hp + 8);
-                } else {
-                    score -= 50; 
-                    player.hp -= 15;
-                }
-                // 從總怪獸陣列中移除這隻已分類的怪
-                let idx = enemies.indexOf(firstTrash);
-                enemies.splice(idx, 1);
-                break; 
-            }
-        }
-    }
-    // ... 後續的 Boss 與碰撞代碼保持不變 ...
 }
 </script>
 </body>
