@@ -101,35 +101,31 @@ class NightMarketMonster {
     }
 update() {
         if (!this.isDead) {
+            // 活著的時候：追逐玩家
             let a = atan2(player.y - this.y, player.x - this.x);
-            this.x += cos(a) * 2.5; this.y += sin(a) * 2.5;
+            this.x += cos(a) * 2.5; 
+            this.y += sin(a) * 2.5;
         } else {
-            // 找出所有死掉的怪物，確定自己的排隊順序
-            let deadEnemies = enemies.filter(e => e.isDead);
-            this.dragIndex = deadEnemies.indexOf(this);
+            // 死了以後：只跟隨「已經在隊伍中」的遺體
+            // 我們只篩選出已經死亡的怪物來排隊
+            let deadQueue = enemies.filter(e => e.isDead);
+            let myIndex = deadQueue.indexOf(this);
 
-            // 只有距離玩家夠近，或是已經在隊伍裡的才會被拖動
-            let dToPlayer = dist(player.x, player.y, this.x, this.y);
-            if (dToPlayer < 100 || this.dragIndex !== -1) {
-                let targetX, targetY;
-
-                if (this.dragIndex === 0) {
-                    // 第一隻死掉的怪，跟在玩家正後方 40 像素處
-                    targetX = player.x; 
-                    targetY = player.y + 45;
-                } else if (this.dragIndex > 0) {
-                    // 後面的怪，跟在前一隻怪的後方 35 像素處
-                    let leader = deadEnemies[this.dragIndex - 1];
-                    targetX = leader.x; 
-                    targetY = leader.y + 35;
-                }
-
-                // 使用 lerp 讓移動更平滑，且不會直接瞬移到中間
-                if (targetX !== undefined) {
-                    this.x = lerp(this.x, targetX, 0.2);
-                    this.y = lerp(this.y, targetY, 0.2);
-                }
+            let targetX, targetY;
+            if (myIndex === 0) {
+                // 第一個遺體：跟隨玩家
+                targetX = player.x;
+                targetY = player.y + 45;
+            } else {
+                // 後面的遺體：只跟隨前一個「遺體」
+                let leader = deadQueue[myIndex - 1];
+                targetX = leader.x;
+                targetY = leader.y + 35;
             }
+
+            // 平滑移動到隊伍位置
+            this.x = lerp(this.x, targetX, 0.2);
+            this.y = lerp(this.y, targetY, 0.2);
         }
     }
     }
@@ -269,6 +265,36 @@ function drawJoystick(joy, col) {
         let d = min(dist(joy.x, joy.y, joy.currX, joy.currY), joySize/2);
         fill(255, 150); ellipse(joy.x + cos(a)*d, joy.y + sin(a)*d, 60);
     }
+}
+function handleCombatAndQueueSorting() {
+    // ... 前方的子彈判定代碼保持不變 ...
+
+    // 取得目前的遺體隊伍
+    let deadQueue = enemies.filter(e => e.isDead);
+    
+    if (deadQueue.length > 0) {
+        // 只有隊伍的第一隻 (最靠近玩家的) 會被垃圾桶吸進去
+        let firstTrash = deadQueue[0]; 
+        
+        for (let b of bins) {
+            // 增加判定距離到 90，讓玩家拖過去時更感應靈敏
+            if (dist(firstTrash.x, firstTrash.y, b.x, b.y) < 90) {
+                if (firstTrash.imgIndex === b.type) {
+                    score += 100; 
+                    totalCleaned++; 
+                    player.hp = min(100, player.hp + 8);
+                } else {
+                    score -= 50; 
+                    player.hp -= 15;
+                }
+                // 從總怪獸陣列中移除這隻已分類的怪
+                let idx = enemies.indexOf(firstTrash);
+                enemies.splice(idx, 1);
+                break; 
+            }
+        }
+    }
+    // ... 後續的 Boss 與碰撞代碼保持不變 ...
 }
 </script>
 </body>
