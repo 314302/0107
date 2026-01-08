@@ -137,7 +137,7 @@ function handleCombatAndSorting() {
         // 偵測是否丟入垃圾桶
         if (e.isDead) {
             for (let b of bins) {
-                if (dist(e.x, e.y, b.x, b.y) < 45) {
+                if (dist(e.x, e.y, b.x, b.y) < 80) {
                     if (e.imgIndex === b.type) {
                         score += 100; // 分類正確
                         player.hp = min(100, player.hp + 5);
