@@ -3,36 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
-    <style> body { margin: 0; overflow: hidden; background: #50a03c; touch-action: none; } </style>
+    <style> 
+        body { margin: 0; overflow: hidden; background: #50a03c; touch-action: none; } 
+    </style>
 </head>
 <body>
 <script>
+// --- 全域變數 ---
 let player, bullets = [], enemies = [], deadQueue = [], bossBullets = [], boss;
 let imgs = [], binImgs = []; 
-let gameOver = false, totalCleaned = 0, TARGET_CLEANED = 15; 
+let gameOver = false, score = 0, totalCleaned = 0, TARGET_CLEANED = 15; 
 let bins = [];
 let currentCarryType = -1, screenShake = 0;
 let leftJoy = { active: false, id: -1, x: 0, y: 0, currX: 0, currY: 0 };
 let joySize = 130;
 
+// --- 資源預載 ---
 function preload() {
-    // 怪物圖片 (確認與你的 GitHub 檔名一致)
+    // 根據你的 GitHub 檔案清單載入怪物
     imgs[0] = loadImage('怪物1號.png'); 
     imgs[1] = loadImage('怪物二號.png'); 
     imgs[2] = loadImage('怪物三號.png'); 
     imgs[3] = loadImage('怪物四號.png'); 
 
-    // 垃圾桶圖片 (修正為 .png 並對應怪物順序)
+    // 根據你的 GitHub 檔案清單載入垃圾桶 (.png)
     binImgs[0] = loadImage('bin_bag.png');    // 對應 怪物1號 (塑膠袋)
     binImgs[1] = loadImage('bin_cup.png');    // 對應 怪物二號 (紙杯)
     binImgs[2] = loadImage('bin_glass.png');  // 對應 怪物三號 (玻璃)
     binImgs[3] = loadImage('bin_bottle.png'); // 對應 怪物四號 (塑膠瓶)
 }
 
+// --- 初始化 ---
 function setup() { 
     createCanvas(windowWidth, windowHeight); 
     player = new Player(); 
     
+    // 建立四個垃圾桶物件
     let binLabels = ["塑膠袋", "紙杯類", "玻璃類", "塑膠瓶"];
     let spacing = width / 4;
     for(let i=0; i<4; i++) {
@@ -47,152 +53,363 @@ function setup() {
     }
 }
 
+// --- 主循環 ---
 function draw() {
     if (gameOver) {
-        background(0, 200); fill(255, 50, 50); textAlign(CENTER); textSize(40);
+        background(0, 200); 
+        fill(255, 50, 50); 
+        textAlign(CENTER); 
+        textSize(40);
         text("環境守護失敗！", width/2, height/2);
-        textSize(20); fill(255); text("點擊重新開始", width/2, height/2 + 50);
+        textSize(20); 
+        fill(255); 
+        text("點擊畫面重新開始", width/2, height/2 + 50);
         return;
     }
-    if (screenShake > 0) { translate(random(-screenShake, screenShake), random(-screenShake, screenShake)); screenShake *= 0.9; }
+    
+    // 畫面震動效果
+    if (screenShake > 0) { 
+        translate(random(-screenShake, screenShake), random(-screenShake, screenShake)); 
+        screenShake *= 0.9; 
+    }
+    
     background(80, 160, 60); 
     drawGrass();
     handleInput();
+    
+    // 繪製垃圾桶
     drawPictureBins();
-    player.update(); player.display();
 
+    // 更新與顯示玩家
+    player.update(); 
+    player.display();
+
+    // 遊戲進度控制：先打小怪，滿 15 個出 Boss
     if (totalCleaned < TARGET_CLEANED) {
-        if (frameCount % 80 === 0 && enemies.length < 8) enemies.push(new NightMarketMonster());
+        if (frameCount % 80 === 0 && enemies.length < 8) {
+            enemies.push(new NightMarketMonster());
+        }
     } else if (!boss) {
         boss = new StyrofoamTitan();
         enemies = []; 
     }
-    if (boss) { boss.update(); boss.display(); if (boss.hp <= 0) { background(0, 200); fill(0, 255, 100); textAlign(CENTER); textSize(35); text("成功淨化保麗龍泰坦！", width/2, height/2); noLoop(); } }
+
+    // Boss 邏輯
+    if (boss) {
+        boss.update();
+        boss.display();
+        if (boss.hp <= 0) {
+            background(0, 200); 
+            fill(0, 255, 100); 
+            textAlign(CENTER); 
+            textSize(35);
+            text("成功淨化保麗龍泰坦！", width/2, height/2);
+            noLoop(); // 停止遊戲
+        }
+    }
+
     processGameLogic(); 
     drawUI();
     drawJoystick(leftJoy, color(0, 200, 255, 80));
 }
 
+// --- 繪製垃圾桶圖片 ---
 function drawPictureBins() {
     imageMode(CENTER);
     for (let b of bins) {
         push();
         translate(b.x, b.y);
+        // 如果手上拿的是正確的垃圾，垃圾桶會發光提示
         if (currentCarryType === b.type) {
-            noStroke(); fill(255, 255, 255, 100 + sin(frameCount * 0.1) * 50);
+            noStroke(); 
+            fill(255, 255, 255, 100 + sin(frameCount * 0.1) * 50);
             rect(0, 0, b.w + 20, b.h + 20, 15);
         }
-        if (binImgs[b.type]) image(binImgs[b.type], 0, 0, b.w, b.h);
-        fill(255); noStroke(); textAlign(CENTER); textSize(14); textStyle(BOLD);
+        if (binImgs[b.type]) {
+            image(binImgs[b.type], 0, 0, b.w, b.h);
+        }
+        fill(255); 
+        noStroke(); 
+        textAlign(CENTER); 
+        textSize(14); 
+        textStyle(BOLD);
         text(b.label, 0, b.h/2 + 25);
         pop();
     }
 }
 
+// --- 繪製背景草地 ---
 function drawGrass() {
-    stroke(60, 140, 50); strokeWeight(2);
-    for(let i=50; i<width; i+=150) { for(let j=50; j<height; j+=150) { line(i, j, i-5, j+10); line(i, j, i+5, j+10); } }
+    stroke(60, 140, 50); 
+    strokeWeight(2);
+    for(let i=50; i<width; i+=150) { 
+        for(let j=50; j<height; j+=150) { 
+            line(i, j, i-5, j+10); 
+            line(i, j, i+5, j+10); 
+        } 
+    }
 }
 
+// --- 類別定義：玩家 ---
 class Player {
-    constructor() { this.x = width/2; this.y = height*0.5; this.vx = 0; this.vy = 0; this.hp = 100; }
+    constructor() {
+        this.x = width/2;
+        this.y = height*0.5;
+        this.vx = 0;
+        this.vy = 0;
+        this.hp = 100;
+    }
     update() {
-        this.vx *= 0.85; this.vy *= 0.85; this.x += this.vx; this.y += this.vy;
-        this.x = constrain(this.x, 20, width-20); this.y = constrain(this.y, 20, height-250);
+        this.vx *= 0.85; 
+        this.vy *= 0.85; 
+        this.x += this.vx; 
+        this.y += this.vy;
+        this.x = constrain(this.x, 20, width-20); 
+        this.y = constrain(this.y, 20, height-250); // 保留底部空間給垃圾桶
     }
     display() {
-        push(); translate(this.x, this.y); if (this.vx < -0.1) scale(-1, 1);
-        noStroke(); fill(255); ellipse(0, 0, 40, 40); 
-        fill(255, 50, 50); ellipse(-10, -5, 6, 8); ellipse(10, -5, 6, 8);
+        push(); 
+        translate(this.x, this.y); 
+        if (this.vx < -0.1) scale(-1, 1);
+        noStroke(); 
+        fill(255); 
+        ellipse(0, 0, 40, 40); // 身體
+        fill(255, 50, 50); 
+        ellipse(-10, -5, 6, 8); // 左眼
+        ellipse(10, -5, 6, 8);  // 右眼
         pop();
     }
 }
 
+// --- 類別定義：魔王 (保麗龍) ---
 class StyrofoamTitan {
-    constructor() { this.x = width/2; this.y = -200; this.targetY = 150; this.hp = 350; this.maxHp = 350; }
+    constructor() { 
+        this.x = width/2; 
+        this.y = -200; 
+        this.targetY = 150; 
+        this.hp = 350; 
+        this.maxHp = 350; 
+    }
     update() {
         if (this.y < this.targetY) this.y += 2;
         this.x = width/2 + sin(frameCount * 0.02) * (width/3);
-        if (frameCount % 60 === 0) bossBullets.push(new Bullet(this.x, this.y, atan2(player.y-this.y, player.x-this.x), true));
+        if (frameCount % 60 === 0) {
+            bossBullets.push(new Bullet(this.x, this.y, atan2(player.y-this.y, player.x-this.x), true));
+        }
     }
     display() {
-        push(); translate(this.x, this.y); fill(240); rectMode(CENTER);
+        push(); 
+        translate(this.x, this.y); 
+        fill(240); 
+        rectMode(CENTER);
         rect(0, 0, 120, 130, 10);
-        fill(255, 0, 0); rect(0, -75, map(this.hp, 0, this.maxHp, 0, 100), 10);
+        // 血條
+        fill(255, 0, 0); 
+        rect(0, -75, map(this.hp, 0, this.maxHp, 0, 100), 10);
         pop();
     }
 }
 
+// --- 類別定義：子彈 ---
 class Bullet {
-    constructor(x, y, a, isBoss = false) { this.x = x; this.y = y; this.a = a; this.isBoss = isBoss; this.speed = isBoss ? 6 : 10; }
-    update() { this.x += cos(this.a)*this.speed; this.y += sin(this.a)*this.speed; }
-    display() { fill(this.isBoss ? color(255, 255, 0) : color(0, 255, 200)); ellipse(this.x, this.y, this.isBoss ? 20 : 10); }
+    constructor(x, y, a, isBoss = false) { 
+        this.x = x; 
+        this.y = y; 
+        this.a = a; 
+        this.isBoss = isBoss; 
+        this.speed = isBoss ? 6 : 10; 
+    }
+    update() { 
+        this.x += cos(this.a) * this.speed; 
+        this.y += sin(this.a) * this.speed; 
+    }
+    display() { 
+        fill(this.isBoss ? color(255, 255, 0) : color(0, 255, 200)); 
+        ellipse(this.x, this.y, this.isBoss ? 20 : 10); 
+    }
 }
 
+// --- 核心遊戲邏輯 ---
 function processGameLogic() {
+    // 1. 處理子彈與怪物的碰撞
     for (let i = bullets.length - 1; i >= 0; i--) {
-        bullets[i].update(); bullets[i].display();
-        if (boss && dist(bullets[i].x, bullets[i].y, boss.x, boss.y) < 60) { boss.hp -= 5; bullets.splice(i, 1); continue; }
+        bullets[i].update(); 
+        bullets[i].display();
+        
+        // 檢查打到 Boss
+        if (boss && dist(bullets[i].x, bullets[i].y, boss.x, boss.y) < 60) {
+            boss.hp -= 5; 
+            bullets.splice(i, 1); 
+            continue;
+        }
+        
+        // 檢查打到小怪
         for (let j = enemies.length - 1; j >= 0; j--) {
             if (dist(bullets[i].x, bullets[i].y, enemies[j].x, enemies[j].y) < 30) {
-                enemies[j].hp--; if (enemies[j].hp <= 0) { deadQueue.push(enemies[j]); enemies.splice(j, 1); }
-                bullets.splice(i, 1); break;
+                enemies[j].hp--; 
+                if (enemies[j].hp <= 0) { 
+                    deadQueue.push(enemies[j]); 
+                    enemies.splice(j, 1); 
+                }
+                bullets.splice(i, 1); 
+                break;
             }
         }
     }
+
+    // 2. 處理活著的怪物移動
     for (let e of enemies) {
-        let a = atan2(player.y-e.y, player.x-e.x); e.x += cos(a)*2; e.y += sin(a)*2;
+        let a = atan2(player.y - e.y, player.x - e.x); 
+        e.x += cos(a) * 2; 
+        e.y += sin(a) * 2;
+        imageMode(CENTER);
         image(imgs[e.imgIndex], e.x, e.y, 50, 50);
         if (dist(e.x, e.y, player.x, player.y) < 35) player.hp -= 0.3;
     }
+
+    // 3. 處理掉落物拾取與跟隨
     let pickedUpList = deadQueue.filter(e => e.isPickedUp);
     if (pickedUpList.length === 0) currentCarryType = -1;
+
     for (let e of deadQueue) {
-        if (!e.isPickedUp) { if (dist(player.x, player.y, e.x, e.y) < 50) { if (currentCarryType === -1 || e.imgIndex === currentCarryType) { e.isPickedUp = true; currentCarryType = e.imgIndex; } } }
-        else {
+        if (!e.isPickedUp) {
+            if (dist(player.x, player.y, e.x, e.y) < 50) {
+                if (currentCarryType === -1 || e.imgIndex === currentCarryType) {
+                    e.isPickedUp = true; 
+                    currentCarryType = e.imgIndex;
+                }
+            }
+        } else {
             let idx = pickedUpList.indexOf(e);
             let tx = idx === 0 ? player.x : pickedUpList[idx-1].x;
             let ty = idx === 0 ? player.y + 40 : pickedUpList[idx-1].y + 30;
-            e.x = lerp(e.x, tx, 0.2); e.y = lerp(e.y, ty, 0.2);
+            e.x = lerp(e.x, tx, 0.2); 
+            e.y = lerp(e.y, ty, 0.2);
         }
         image(imgs[e.imgIndex], e.x, e.y, 45, 45);
     }
+
+    // 4. 判定回收成功
     if (pickedUpList.length > 0) {
         let first = pickedUpList[0];
         for (let b of bins) {
             if (dist(first.x, first.y, b.x, b.y) < 80) {
-                if (first.imgIndex === b.type) { totalCleaned++; player.hp = min(100, player.hp + 5); }
-                else { player.hp -= 15; screenShake = 8; }
-                deadQueue.splice(deadQueue.indexOf(first), 1); break;
+                if (first.imgIndex === b.type) { 
+                    totalCleaned++; 
+                    player.hp = min(100, player.hp + 5); 
+                } else { 
+                    player.hp -= 15; 
+                    screenShake = 8; 
+                }
+                deadQueue.splice(deadQueue.indexOf(first), 1); 
+                break;
             }
         }
     }
-    for (let i = bossBullets.length-1; i >= 0; i--) {
-        bossBullets[i].update(); bossBullets[i].display();
-        if (dist(bossBullets[i].x, bossBullets[i].y, player.x, player.y) < 25) { player.hp -= 10; bossBullets.splice(i, 1); screenShake = 5; }
+
+    // 5. 魔王攻擊與玩家受傷
+    for (let i = bossBullets.length - 1; i >= 0; i--) {
+        bossBullets[i].update(); 
+        bossBullets[i].display();
+        if (dist(bossBullets[i].x, bossBullets[i].y, player.x, player.y) < 25) {
+            player.hp -= 10; 
+            bossBullets.splice(i, 1); 
+            screenShake = 5;
+        }
     }
     if (player.hp <= 0) gameOver = true;
 }
 
+// --- 輸入控制 ---
 function handleInput() {
     let ms = 2.2;
-    if (keyIsDown(65)) player.vx -= ms; if (keyIsDown(68)) player.vx += ms;
-    if (keyIsDown(87)) player.vy -= ms; if (keyIsDown(83)) player.vy += ms;
-    if (mouseIsPressed && !leftJoy.active && frameCount % 8 === 0) bullets.push(new Bullet(player.x, player.y, atan2(mouseY-player.y, mouseX-player.x)));
+    if (keyIsDown(65)) player.vx -= ms; // A
+    if (keyIsDown(68)) player.vx += ms; // D
+    if (keyIsDown(87)) player.vy -= ms; // W
+    if (keyIsDown(83)) player.vy += ms; // S
+    
+    // 滑鼠點擊發射
+    if (mouseIsPressed && !leftJoy.active && frameCount % 8 === 0) {
+        bullets.push(new Bullet(player.x, player.y, atan2(mouseY - player.y, mouseX - player.x)));
+    }
+    
+    // 搖桿移動
     if (leftJoy.active) {
-        let a = atan2(leftJoy.currY-leftJoy.y, leftJoy.currX-leftJoy.x);
+        let a = atan2(leftJoy.currY - leftJoy.y, leftJoy.currX - leftJoy.x);
         let d = min(dist(leftJoy.x, leftJoy.y, leftJoy.currX, leftJoy.currY), joySize/2);
-        player.vx += cos(a)*(d/(joySize/2))*2.5; player.vy += sin(a)*(d/(joySize/2))*2.5;
+        player.vx += cos(a) * (d / (joySize/2)) * 2.5; 
+        player.vy += sin(a) * (d / (joySize/2)) * 2.5;
     }
 }
 
-class NightMarketMonster { constructor() { this.x = random(width); this.y = -50; this.hp = 2; this.imgIndex = floor(random(4)); this.isPickedUp = false; } }
-function drawUI() { fill(255); noStroke(); textAlign(LEFT); textSize(18); text(`能源: ${floor(player.hp)}%`, 20, 30); text(`回收進度: ${totalCleaned} / ${TARGET_CLEANED}`, 20, 60); }
-function touchStarted() { for (let t of touches) { if (t.x < width/2) { leftJoy.active = true; leftJoy.id = t.id; leftJoy.x = t.x; leftJoy.y = t.y; leftJoy.currX = t.x; leftJoy.currY = t.y; } } if (gameOver) location.reload(); return false; }
-function touchMoved() { for (let t of touches) { if (t.id === leftJoy.id) { leftJoy.currX = t.x; leftJoy.currY = t.y; } } return false; }
-function touchEnded() { let sL = false; for (let t of touches) { if (t.id === leftJoy.id) sL = true; } if (!sL) leftJoy.active = false; return false; }
-function drawJoystick(joy, col) { if (joy.active) { fill(col); ellipse(joy.x, joy.y, joySize); fill(255, 150); ellipse(joy.currX, joy.currY, 60); } }
-function mousePressed() { if (gameOver) location.reload(); }
+// --- 怪物類別 ---
+class NightMarketMonster { 
+    constructor() { 
+        this.x = random(width); 
+        this.y = -50; 
+        this.hp = 2; 
+        this.imgIndex = floor(random(4)); 
+        this.isPickedUp = false; 
+    } 
+}
+
+// --- 使用者介面 ---
+function drawUI() { 
+    fill(255); 
+    noStroke(); 
+    textAlign(LEFT); 
+    textSize(18); 
+    text(`能源: ${floor(player.hp)}%`, 20, 30); 
+    text(`回收進度: ${totalCleaned} / ${TARGET_CLEANED}`, 20, 60); 
+}
+
+// --- 觸控邏輯 ---
+function touchStarted() { 
+    for (let t of touches) { 
+        if (t.x < width/2) { 
+            leftJoy.active = true; 
+            leftJoy.id = t.id; 
+            leftJoy.x = t.x; leftJoy.y = t.y; 
+            leftJoy.currX = t.x; leftJoy.currY = t.y; 
+        } 
+    } 
+    if (gameOver) location.reload();
+    return false; 
+}
+function touchMoved() { 
+    for (let t of touches) { 
+        if (t.id === leftJoy.id) { 
+            leftJoy.currX = t.x; 
+            leftJoy.currY = t.y; 
+        } 
+    } 
+    return false; 
+}
+function touchEnded() { 
+    let stillLeft = false; 
+    for (let t of touches) { if (t.id === leftJoy.id) stillLeft = true; } 
+    if (!stillLeft) leftJoy.active = false; 
+    return false; 
+}
+
+// --- 搖桿繪製 ---
+function drawJoystick(joy, col) { 
+    if (joy.active) { 
+        fill(col); 
+        ellipse(joy.x, joy.y, joySize); 
+        fill(255, 150); 
+        ellipse(joy.currX, joy.currY, 60); 
+    } 
+}
+
+// --- 視窗縮放適應 ---
+function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+}
+
+function mousePressed() { 
+    if (gameOver) location.reload(); 
+}
 </script>
 </body>
 </html>
